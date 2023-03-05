@@ -1,7 +1,10 @@
+
 import sqlalchemy
+from flask import Flask, jsonify,render_template,url_for
+from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.ext.automap import automap_base
 from sqlalchemy.orm import Session, sessionmaker
-from sqlalchemy import create_engine, MetaData, func, desc
+from sqlalchemy import create_engine, MetaData, func, desc, distinct
 from sqlalchemy.ext.declarative import declarative_base
 import csv
 from datetime import datetime, timedelta
@@ -47,14 +50,13 @@ for temp_stations in stations:
 #Method no 1:
 
 #fetching all the data from dataset
-measure = session.query(measurment).all()
+measure = session.query(measurment.station,measurment.date,measurment.tobs).all()
 
 # Initialize the most recent date to None
 most_recent_date = None
 for temp_measurement in measure:
     date_str=temp_measurement.date
     date = datetime.strptime(date_str, '%Y-%m-%d')
-
     ##Convert most_recent_date to a datetime object if it's a string
     if isinstance(most_recent_date, str):
         most_recent_date = datetime.strptime(most_recent_date, '%Y-%m-%d')
@@ -138,10 +140,13 @@ print(precipitation_stats)
 station_count = session.query(func.count(station.id)).scalar()
 print(station_count)
 
+station_names = session.query(distinct(station.name)).all()
+station_names_list = [name[0] for name in station_names]
 #Query for counting the observation count for every station.
 observation_count_results = session.query(measurment.station, func.count(measurment.station),measurment.date).\
             group_by(measurment.station).\
             order_by(desc(func.count(measurment.station))).all()
+
 
 # for one_row in observation_count_results:
 #     print(one_row)
@@ -162,7 +167,7 @@ print(f"Average Temperature: {statistics_of_most_observation[0][2]}")
 date_of_having_most_observation_station =observation_count_results[0][2]
 print (date_of_having_most_observation_station)
 last_year_date = datetime.strptime(date_of_having_most_observation_station, '%Y-%m-%d') - timedelta(days=365)
-previous_year_results_for_tob = session.query(measurment.station, measurment.tobs).filter(measurment.date >= last_year_date)\
+previous_year_results_for_tob = session.query(measurment.station, measurment.tobs,measurment.date).filter(measurment.date >= last_year_date)\
                   .filter(measurment.date <= date_of_having_most_observation_station)\
                   .all()
 # for station, tobs in previous_year_results_for_tob:
@@ -185,3 +190,101 @@ plt.show()
 
 #closing the session:
 session.close()
+
+
+
+app = Flask(__name__)
+app.config['SQLALCHEMY_DATABASE_URI'] = "sqlite:///Resources/hawaii.sqlite"
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+db = SQLAlchemy(app)
+
+@app.route('/')
+def homepage():
+    return  render_template("home.html")
+
+@app.route('/api/v1.0/precipitation')
+def precipitation():
+    precipitation_dict = {date: prcp for date, prcp in previous_year_results}
+    return jsonify(precipitation_dict)
+
+
+@app.route('/api/v1.0/stations')
+def stations():
+
+    return jsonify(station_names_list)
+
+
+@app.route('/api/v1.0/tobs')
+def tobs():
+    #tobs_dict={date:tobs for date,tobs in previous_year_results_for_tob}
+    tobs_dict=[(result[0],result[2], result[1]) for result in previous_year_results_for_tob]
+    return jsonify(tobs_dict)
+
+@app.route('/api/v1.0/<start_date>/<end_date>',methods=['GET','POST'])
+def temperature_start_date_to_end_date(start_date,end_date):
+    if(start_date>=end_date):
+        return"You have entered date in wrong order"
+
+
+    filter = session.query(measurment.date, measurment.tobs).filter(measurment.date >= start_date , measurment.date<=end_date)
+
+    count = 0
+    total_temp = 0
+    max_temp = 0
+    min_temp = 0
+    for row in filter:
+        total_temp = total_temp + row[1]
+        if (max_temp < row[1]):
+            max_temp = row[1]
+        if (min_temp > row[1]):
+            min_temp = row[1]
+        count = count + 1
+
+    if (count == 0):
+        return " No data is found OR entered date is incorrect "
+
+    avg_temp = total_temp / count
+
+    session.close()
+    return jsonify({
+
+        'min_tobs': min_temp,
+        'max_tobs': max_temp,
+        'avg_tobs': avg_temp
+    })
+
+
+@app.route('/api/v1.0/<start_date>',methods=['GET','POST'])
+def temperature_start_date(start_date):
+   filter=session.query(measurment.date,measurment.tobs).filter(measurment.date >= start_date)
+
+   count=0
+   total_temp=0
+   max_temp=0
+   min_temp=0
+   for row in filter:
+       total_temp=total_temp+row[1]
+       if(max_temp<row[1]):
+        max_temp=row[1]
+       if(min_temp>row[1]):
+        min_temp=row[1]
+       count=count+1
+
+   if(count==0):
+        return " No data is found OR enter date is incorrect "
+
+   avg_temp=total_temp/count
+
+   session.close()
+   return jsonify({
+
+       'min_tobs': min_temp,
+       'max_tobs': max_temp,
+       'avg_tobs': avg_temp
+   })
+
+
+if __name__ == '__main__':
+
+    print("yipi")
+    app.run(debug=False)
