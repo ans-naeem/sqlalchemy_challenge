@@ -36,11 +36,6 @@ stations = session.query(station).all()
 for temp_stations in stations:
     print(temp_stations.name, temp_stations.elevation)
 
-# Query the measurment table in hawaii.sqlite database and print the results
-# measure = session.query(measurment).all()
-# for temp_measurement in measure:
-#     print(temp_measurement.date, temp_measurement.prcp)
-
 # ************************ ************************
 #Now the Precipitation Analysis:
 # ************************ ************************
@@ -66,7 +61,8 @@ for temp_measurement in measure:
         most_recent_date = date_str
 print(most_recent_date.strftime('%Y-%m-%d'))
 
-#************ second way *****************:
+#************ second way to get most recent date*****************:
+
 most_recent_date2 = session.query(measurment.date).order_by(measurment.date.desc()).first()[0]
 print(most_recent_date2)
 
@@ -75,8 +71,9 @@ start_date = datetime.strptime(most_recent_date2, '%Y-%m-%d') - timedelta(days=3
 previous_year_results = session.query(measurment.date, measurment.prcp).filter(measurment.date >= start_date)\
                   .filter(measurment.date <= most_recent_date)\
                   .all()
-for date, prcp in previous_year_results:
-    print(f"Date: {date}, Precipitation: {prcp}")
+
+# for date, prcp in previous_year_results:
+#     print(f"Date: {date}, Precipitation: {prcp}")
 
 # ************************ ************************
 # its for file reading
@@ -122,10 +119,10 @@ df.set_index('date', inplace=True)
 
 
 #using the DataFrame plot method
-# df_sorted = df.sort_values('date')
-#
-# df_sorted.plot()
-# plt.show()
+df_sorted = df.sort_values('date')
+
+df_sorted.plot()
+plt.show()
 
 #using Pandas to print the summary statistics for the precipitation data.
 precipitation_stats = df['precipitation'].describe()
@@ -142,6 +139,7 @@ print(station_count)
 
 station_names = session.query(distinct(station.name)).all()
 station_names_list = [name[0] for name in station_names]
+
 #Query for counting the observation count for every station.
 observation_count_results = session.query(measurment.station, func.count(measurment.station),measurment.date).\
             group_by(measurment.station).\
